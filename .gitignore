@@ -1,0 +1,4 @@
+node_modules/
+mysql/
+.DS_Store
+frontend/node_modules/
