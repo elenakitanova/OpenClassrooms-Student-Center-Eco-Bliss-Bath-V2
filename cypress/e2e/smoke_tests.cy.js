@@ -15,15 +15,14 @@ describe('Besoin : Connexion au site', () => {
   it('CDT1 : Vérifier la présence du lien "Connexion" dans la Navbar', () => {
     
     // ÉTAPES :
-    // 1. Accéder à l'URL du site et ouvrir le site 
+    // 1. Accéder à l'URL du site via la baseUrl configurée
     // 2. Afficher la page d'accueil
-    cy.visit('http://localhost:4200/#/');
+    cy.visit('/#/');
 
     // RÉSULTAT ATTENDU : 
     // La barre de navigation est affichée et contient le lien "Connexion"
-    // Utilisation de cy.contains pour trouver le lien n'importe où dans la page
-    // On attend directement que le lien "Connexion" soit visible
-    cy.contains('Connexion', { timeout: 10000 }).should('be.visible');
+    // Le timeout est maintenant géré globalement par la configuration Cypress
+    cy.contains('Connexion').should('be.visible');
   });
 
   
@@ -32,8 +31,8 @@ describe('Besoin : Connexion au site', () => {
   it('CDT2 : Vérifier l\'affichage de la Page de Connexion et de ses champs', () => {
     
     // ÉTAPES :
-    // Depuis la Page d'Accueil, cliquer sur le lien "Connexion" dans la barre de navigation
-    cy.visit('http://localhost:4200/#/');
+    // Depuis la Page d'Accueil (URL relative), cliquer sur le lien "Connexion"
+    cy.visit('/#/');
     cy.contains('Connexion').click();
 
     // RÉSULTAT ATTENDU : 
@@ -41,8 +40,8 @@ describe('Besoin : Connexion au site', () => {
     // ainsi que le bouton "Se connecter"
     cy.url().should('include', '/login');
     
-    // On attend que le bouton spécifique de cette page soit là
-    cy.contains('button', 'Se connecter', { timeout: 10000 }).should('be.visible');
+    // Vérification des éléments de la page
+    cy.contains('button', 'Se connecter').should('be.visible');
     cy.contains('Email').should('be.visible');
     cy.contains('Mot de passe').should('be.visible');
   });
@@ -63,13 +62,13 @@ describe('Besoin : Ajout au panier (Utilisateur connecté)', () => {
    */
 
   beforeEach(() => {
-    // PRÉ-REQUIS : Connexion avec un compte valide
-    // "Entrer “test2@test.fr” dans le champ de l’email, “testtest” comme mot de passe"
-    cy.visit('http://localhost:4200/#/login');
+    // PRÉ-REQUIS : Connexion en utilisant les variables d'environnement du fichier config
+    // Utilisation de Cypress.env() pour récupérer les identifiants de test
+    cy.visit('/#/login');
     
-    // On attend que les champs soient prêts avant d'écrire
-    cy.get('input#username', { timeout: 10000 }).should('be.visible').type('test2@test.fr');
-    cy.get('input#password').type('testtest');
+    // Saisie des identifiants récupérés depuis la configuration
+    cy.get('input#username').should('be.visible').type(Cypress.env('userEmail'));
+    cy.get('input#password').type(Cypress.env('userPassword'));
     cy.contains('button', 'Se connecter').click();
     
     // Attente que la session soit établie
@@ -81,13 +80,12 @@ describe('Besoin : Ajout au panier (Utilisateur connecté)', () => {
   it('CDT1 : Vérifier le changement des liens de navigation (Mon panier et Déconnexion) après connexion', () => {
     
     // ÉTAPES:
-    // Depuis la Page d'Accueil vérifier la présence des liens "Mon panier" 
-    // et "Déconnexion" dans la Navbar
-    cy.visit('http://localhost:4200/#/');
+    // Accéder à la racine du site (baseUrl) et vérifier les liens de session
+    cy.visit('/#/');
 
     // RÉSULTAT ATTENDU : 
-    // La barre de navigation est affichée et contient les liens "Mon panier" et "Déconnexion"
-    cy.contains('Mon panier', { timeout: 10000 }).should('be.visible');
+    // La barre de navigation contient les liens réservés aux membres connectés
+    cy.contains('Mon panier').should('be.visible');
     cy.contains('Déconnexion').should('be.visible');
   });
 
@@ -96,16 +94,13 @@ describe('Besoin : Ajout au panier (Utilisateur connecté)', () => {
   it('CDT2 : Vérifier l\'accès à la Page Produits depuis la Page d\'Accueil', () => {
     
     // ÉTAPES :
-    // Depuis la Page d'Accueil vérifier :
-    // => dans la Navbar : la présence du lien "Produits" 
-    // => dans le body : la présence du bouton "Voir les produits"
-    cy.visit('http://localhost:4200/#/');
+    // Depuis la Page d'Accueil vérifier la navigation vers les produits
+    cy.visit('/#/');
     
     // RÉSULTAT ATTENDU : 
-    // => La barre de navigation est affichée et contient le lien "Produits"
-    // => Le bouton "Voir les produits" est présent dans le body du site
+    // Présence des points d'entrée vers le catalogue produits
     cy.contains('Produits').should('be.visible');
-    cy.contains('button', 'Voir les produits', { timeout: 10000 }).should('be.visible');
+    cy.contains('button', 'Voir les produits').should('be.visible');
   });
 
   // CDT3 
@@ -113,13 +108,12 @@ describe('Besoin : Ajout au panier (Utilisateur connecté)', () => {
   it('CDT3 : Vérifier l\'accès à la page de détail de chaque produit', () => {
     
     // ÉTAPES : 
-    // Depuis la Page du Produit sur les cards de tous les produits 
-    // vérifier la présence des boutons "Consulter"
-    cy.visit('http://localhost:4200/#/products');
+    // Accès direct à la liste des produits via le chemin relatif
+    cy.visit('/#/products');
 
     // RÉSULTAT ATTENDU : 
-    // Les boutons "Consulter" s'affichent sur les cards de tous les produits
-    cy.contains('Consulter', { timeout: 10000 }).should('be.visible');
+    // Les boutons "Consulter" sont présents sur les fiches produits
+    cy.contains('Consulter').should('be.visible');
   });
 
   // CDT4 
@@ -130,12 +124,12 @@ describe('Besoin : Ajout au panier (Utilisateur connecté)', () => {
 
     ids.forEach((id) => {
       // ÉTAPES : 
-      // Depuis la Page de chaque produit vérifier que le bouton "Ajouter au panier" est présent
-      cy.visit(`http://localhost:4200/#/products/${id}`);
+      // Navigation dynamique vers chaque produit en utilisant la baseUrl
+      cy.visit(`/#/products/${id}`);
 
       // RÉSULTAT ATTENDU : 
-      // Le bouton "Ajouter au panier" s'affiche sur la page de détail de chaque produit
-      cy.contains('button', 'Ajouter au panier', { timeout: 10000 }).should('be.visible');
+      // Le bouton d'action est disponible pour l'utilisateur connecté
+      cy.contains('button', 'Ajouter au panier').should('be.visible');
     });
   });
 });
