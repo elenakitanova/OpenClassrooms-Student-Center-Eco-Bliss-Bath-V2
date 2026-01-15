@@ -24,8 +24,14 @@ module.exports = defineConfig({
   // 5. Variables d'environnement et Constantes
   // Accessibles dans les tests via Cypress.env('nom_de_la_variable')
   env: {
-    apiUrl: 'http://localhost:8081', // URL de l'API Backend (Docker)
-    userEmail: 'test2@test.fr',     // Identifiant pour les tests
-    userPassword: 'testtest'        // Mot de passe pour les tests
+  apiUrl: 'http://localhost:8081', // URL de l'API Backend (Docker)
+  userEmail: 'test2@test.fr',     // Identifiant pour les tests
+  userPassword: 'testtest',        // Mot de passe pour les tests
+  firstName: 'John',
+  lastName: 'Doe',
+  address: '123 Rue Principale',
+  city: 'Paris',
+  zipCode: '75001'
   }
+
 });
