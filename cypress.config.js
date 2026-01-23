@@ -1,6 +1,6 @@
-const { defineConfig } = require('cypress');
+import { defineConfig } from "cypress";
 
-module.exports = defineConfig({
+export default defineConfig({
   e2e: {
     // 1. URL de base de l'application (Frontend Angular)
     // Permet d'utiliser cy.visit('/') au lieu de l'URL complète
@@ -18,20 +18,22 @@ module.exports = defineConfig({
 
     setupNodeEvents(on, config) {
       // Emplacement pour d'éventuels plugins ou configurations avancées
+      return config;
     },
+    // On s'assure que Cypress cherche bien les fichiers .ts
+    specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}'
   },
 
   // 5. Variables d'environnement et Constantes
   // Accessibles dans les tests via Cypress.env('nom_de_la_variable')
   env: {
-  apiUrl: 'http://localhost:8081', // URL de l'API Backend (Docker)
-  userEmail: 'test2@test.fr',     // Identifiant pour les tests
-  userPassword: 'testtest',        // Mot de passe pour les tests
-  firstName: 'John',
-  lastName: 'Doe',
-  address: '123 Rue Principale',
-  city: 'Paris',
-  zipCode: '75001'
+    apiUrl: 'http://localhost:8081', // URL de l'API Backend (Docker)
+    userEmail: 'test2@test.fr',     // Identifiant pour les tests
+    userPassword: 'testtest',        // Mot de passe pour les tests
+    firstName: 'John',
+    lastName: 'Doe',
+    address: '123 Rue Principale',
+    city: 'Paris',
+    zipCode: '75001'
   }
-
 });

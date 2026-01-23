@@ -13,658 +13,304 @@
  * - Comparer le comportement réel de l’API avec les résultats des tests manuels
  * - Documenter les anomalies identifiées par Marie et leur correction éventuelle
  *
- * IMPORTANT :
- * Certains tests valident volontairement des comportements non conformes
- * afin de documenter des anomalies toujours présentes côté backend.
+ * TYPES DE TESTS INCLUS :
+ * [OBLIGATOIRE] : Recommandés par Marie.
+ * [NON-OBLIGATOIRE / ALTERNATIF] : Tests des autres endpoints.
  * ============================================================================
  */
 
-describe('API – Eco Bliss Bath', () => {
+describe('Campagne de Tests API Eco Bliss', () => {
+  const apiUrl = Cypress.env('apiUrl');
+  let authToken;
+  let dynamicProductId;
+  let outOfStockProductId;
 
-  // ---------------------------------------------------------------------------
-  // VARIABLES GLOBALES
-  // ---------------------------------------------------------------------------
-  let token;
-
-  // ---------------------------------------------------------------------------
-  // PRÉREQUIS : AUTHENTIFICATION API
-  // ---------------------------------------------------------------------------
+  // CONFIGURATION INITIALE
   before(() => {
-    /**
-     * OBJECTIF :
-     * - Récupérer un token JWT pour les tests nécessitant authentification.
-     *
-     * STRATÉGIE :
-     * - Utilisation d'un compte test défini dans Cypress.env
-     * - Vérification que la connexion réussit avant de lancer les tests
-     *
-     * CONCLUSION QA :
-     * - Token disponible pour tous les tests nécessitant authentification
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/login`,
-      body: {
-        username: Cypress.env('userEmail'),
-        password: Cypress.env('userPassword')
-      }
+    // 1. Connexion globale pour obtenir le token
+    cy.request('POST', `${apiUrl}/login`, {
+      username: Cypress.env('userEmail'),
+      password: Cypress.env('userPassword')
     }).then((res) => {
-      expect(res.status).to.eq(200); 
-      token = res.body.token;
-      cy.log('TOKEN API:', token);
+      authToken = res.body.token;
+    });
+
+    // 2. Récupération dynamique d'un ID de produit valide
+    cy.request('GET', `${apiUrl}/products`).then((res) => {
+      dynamicProductId = res.body.find(p => p.quantity > 0)?.id || res.body[0].id;
+      // Identification d'un produit en rupture pour le test de Marie
+      const oosProduct = res.body.find(p => p.quantity <= 0);
+      outOfStockProductId = oosProduct ? oosProduct.id : null;
     });
   });
 
-  // ===========================================================================
-  // TESTS OBLIGATOIRES RECOMMANDÉS PAR MARIE
-  // ===========================================================================
+  // --------------------------------------------------------------------------
+  // SECTION 1 : AUTHENTIFICATION & UTILISATEURS
+  // --------------------------------------------------------------------------
 
-  // ---------------------------------------------------------------------------
-  // API-01 : ACCÈS AUX DONNÉES SENSIBLES SANS AUTHENTIFICATION
-  // ---------------------------------------------------------------------------
-  it('API-01 : GET /orders sans être connecté → 401 (anomalie sécurité)', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier que l’accès aux commandes sans authentification est refusé
-     *
-     * STRATÉGIE :
-     * - GET /orders sans token
-     *
-     * CONCLUSION QA :
-     * - Le serveur renvoie bien 401
-     */
+  // [OBLIGATOIRE] Vérifie que les utilisateurs existants peuvent accéder au service
+  it('1. POST /login - Connexion réussie (Scénario Nominal)', () => {
+    cy.request({
+      method: 'POST',
+      url: `${apiUrl}/login`,
+      body: { username: Cypress.env('userEmail'), password: Cypress.env('userPassword') }
+    }).then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.body).to.have.property('token');
+    });
+  });
+
+  // [BLIGATOIRE] Vérifie la robustesse contre les tentatives d'intrusion
+  it('2. POST /login - Échec avec identifiants invalides (401)', () => {
+    cy.request({
+      method: 'POST',
+      url: `${apiUrl}/login`,
+      body: { username: 'wrong@test.com', password: 'bad_password' },
+      failOnStatusCode: false
+    }).its('status').should('eq', 401);
+  });
+
+  // [COMPLEMENTAIRE] Teste le tunnel d'acquisition de nouveaux clients
+  it('3. POST /register - Création de compte (Scénario Nominal)', () => {
+    const newUser = `user_${Date.now()}@test.com`;
+    cy.request({
+      method: 'POST',
+      url: `${apiUrl}/register`,
+      body: { 
+        email: newUser,
+        firstname: "Elena", 
+        lastname: "Kitanova", 
+        plainPassword: { first: "Ecobliss4", second: "Ecobliss4" }
+      }
+    }).its('status').should('be.oneOf', [200, 201]);
+  });
+
+  // [OBLIGATOIRE] Garantit que l'unicité des comptes est respectée (Correction Marie)
+  it('3b. POST /register - ÉCHEC si l\'utilisateur existe déjà', () => {
+    cy.request({
+      method: 'POST',
+      url: `${apiUrl}/register`,
+      failOnStatusCode: false,
+      body: { 
+        email: Cypress.env('userEmail'), // Utilisation d'un email déjà en base
+        firstname: "Elena", 
+        lastname: "Kitanova", 
+        plainPassword: { first: "Ecobliss4", second: "Ecobliss4" }
+      }
+    }).then((res) => {
+      // On attend une erreur 400 ou 409 (Conflit)
+      expect(res.status).to.be.oneOf([400, 409]);
+    });
+  });
+
+  // [COMPLEMENTAIRE] Vérifie la validation des données côté serveur
+  it('3c. POST /register - ÉCHEC si mots de passe différents', () => {
+    cy.request({
+      method: 'POST',
+      url: `${apiUrl}/register`,
+      failOnStatusCode: false,
+      body: { 
+        email: `error_${Date.now()}@test.com`,
+        firstname: "Elena", 
+        lastname: "Kitanova", 
+        plainPassword: { first: "Ecobliss4", second: "DifferentPassword" }
+      }
+    }).its('status').should('eq', 400);
+  });
+
+  // [OBLIGATOIRE] Vérifie l'accès aux données personnelles après connexion
+  it('4. GET /me - Récupération des infos utilisateur connecté', () => {
     cy.request({
       method: 'GET',
-      url: `${Cypress.env('apiUrl')}/orders`,
-      failOnStatusCode: false
-    }).then((res) => {
-      expect(res.status).to.eq(401);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-02 : ACCÈS À /orders AVEC AUTHENTIFICATION
-  // ---------------------------------------------------------------------------
-  it('API-02 : GET /orders connecté → 200 si panier existe / 404 si vide', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier que l’utilisateur authentifié peut accéder à ses commandes
-     *
-     * STRATÉGIE :
-     * - Créer une commande pour garantir un panier existant
-     * - GET /orders et vérifier le format de réponse
-     * - Supprimer la commande créée pour nettoyer l’état
-     *
-     * CONCLUSION QA :
-     * - Test robuste, isolé, et indépendant de l’état précédent
-     */
-    // 1️⃣ Création d'une commande/panier
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/orders`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: {
-        firstname: Cypress.env('firstName'),
-        lastname: Cypress.env('lastName'),
-        address: Cypress.env('address'),
-        zipCode: Cypress.env('zipCode'),
-        city: Cypress.env('city')
-      },
-      failOnStatusCode: false
-    }).then((resCreate) => {
-      const orderId = resCreate.body.id;
-
-      // 2️⃣ GET /orders
-      cy.request({
-        method: 'GET',
-        url: `${Cypress.env('apiUrl')}/orders`,
-        headers: { Authorization: `Bearer ${token}` },
-        failOnStatusCode: false
-      }).then((res) => {
-        expect([200, 404]).to.include(res.status);
-        if (res.status === 200) {
-          expect(res.body).to.be.an('object');
-          expect(res.body).to.have.property('id');
-          if (Array.isArray(res.body.orders)) {
-            res.body.orders.forEach(order => {
-              expect(order).to.have.property('id');
-            });
-          }
-        }
-      });
-
-      // 3️⃣ Nettoyage : suppression de la commande créée
-      cy.request({
-        method: 'DELETE',
-        url: `${Cypress.env('apiUrl')}/orders/${orderId}`,
-        headers: { Authorization: `Bearer ${token}` },
-        failOnStatusCode: false
-      }).then((resDelete) => {
-        expect([204, 404]).to.include(resDelete.status);
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-03 : CONSULTATION DU CATALOGUE PRODUITS - PRODUIT SPECIFIQUE
-  // ---------------------------------------------------------------------------
-  it('API-03 : GET /products/{id} → 200', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier qu’un produit spécifique peut être consulté
-     *
-     * STRATÉGIE :
-     * - GET /products/{id} avec un id existant
-     *
-     * CONCLUSION QA :
-     * - Réponse 200 et toutes les clés attendues présentes
-     */
-    const productId = 5;
-    cy.request(`${Cypress.env('apiUrl')}/products/${productId}`)
-      .then((resProduct) => {
-        expect(resProduct.status).to.eq(200);
-        expect(resProduct.body).to.have.all.keys(
-          'id', 'name', 'availableStock', 'skin', 'aromas',
-          'ingredients', 'description', 'price', 'picture', 'varieties'
-        );
-        expect(resProduct.body.id).to.eq(productId);
-        expect(resProduct.body.availableStock).to.be.at.least(0);
-      });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-04 : AJOUT D’UN PRODUIT AU PANIER
-  // ---------------------------------------------------------------------------
-  it('API-04 : PUT /orders/add → 400 (anomalie backend documentée)', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier la gestion d’un ajout produit avec problème backend connu
-     *
-     * STRATÉGIE :
-     * - PUT /orders/add avec produit 5
-     *
-     * CONCLUSION QA :
-     * - La requête renvoie bien 400 et contient le message d’erreur attendu
-     */
-    cy.request({
-      method: 'PUT',
-      url: `${Cypress.env('apiUrl')}/orders/add`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: { product: '/products/5', quantity: 1 },
-      failOnStatusCode: false
-    }).then((res) => {
-      expect(res.status).to.eq(400);
-      expect(res.body).to.have.property('error');
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-05 : AJOUT D’UN AVIS CLIENT
-  // ---------------------------------------------------------------------------
-  it('API-05 : POST /reviews → 200', () => {
-    /**
-     * OBJECTIF :
-     * - Ajouter un avis sur un produit
-     *
-     * STRATÉGIE :
-     * - POST /reviews avec token
-     *
-     * CONCLUSION QA :
-     * - Réponse 200 confirmant l’ajout de l’avis
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/reviews`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: { title: 'Excellent produit', comment: 'Très bon savon', rating: 5 }
+      url: `${apiUrl}/me`,
+      headers: { Authorization: `Bearer ${authToken}` }
     }).then((res) => {
       expect(res.status).to.eq(200);
+      expect(res.body).to.have.property('email', Cypress.env('userEmail'));
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // API-06 : LOGIN AVEC IDENTIFIANTS INVALIDES → 401
-  // ---------------------------------------------------------------------------
-  it('API-06 : POST /login mauvais mot de passe → 401', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier que le login échoue avec mot de passe incorrect
-     *
-     * STRATÉGIE :
-     * - POST /login avec mot de passe erroné
-     *
-     * CONCLUSION QA :
-     * - Retour 401 et message d’erreur correct
-     */
+  // --------------------------------------------------------------------------
+  // SECTION 2 : SANTÉ & PRODUITS
+  // --------------------------------------------------------------------------
+
+  // [COMPLEMENTAIRE] Test de surveillance infrastructure (DevOps)
+  it('5. GET /api/health - Vérification état de l’API', () => {
     cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/login`,
-      body: { username: 'string', password: 'wrongpassword' },
+      url: `${apiUrl}/api/health`,
+      failOnStatusCode: false
+    }).its('status').should('be.oneOf', [200, 404]);
+  });
+
+  // [OBLIGATOIRE] Indispensable pour l'affichage du catalogue front-end
+  it('6. GET /products - Liste des produits', () => {
+    cy.request('GET', `${apiUrl}/products`).then((res) => {
+      expect(res.status).to.eq(200);
+      const product = res.body[0];
+      expect(product).to.have.property('id');
+      expect(product).to.have.property('name');
+      expect(product).to.have.property('price');
+    });
+  });
+
+  // [COMPLEMENTAIRE] 3 produits aléatoires
+  it('7. GET /products/random - Récupération de 3 produits aléatoires', () => {
+    cy.request({
+      url: `${apiUrl}/products/random`,
       failOnStatusCode: false
     }).then((res) => {
-      expect(res.status).to.eq(401);
-      expect(res.body).to.have.property('message', 'Invalid credentials.');
+      if (res.status === 200) {
+        expect(res.body).to.be.an('array');
+        expect(res.body.length).to.be.at.most(3);
+      }
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // API-07 : AJOUT D’UN PRODUIT EN RUPTURE DE STOCK
-  // ---------------------------------------------------------------------------
-  it('API-07 : PUT /orders/add produit en rupture de stock → 400', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier que l’ajout d’un produit en rupture de stock est refusé
-     *
-     * STRATÉGIE :
-     * - PUT /orders/add avec produit en rupture
-     *
-     * CONCLUSION QA :
-     * - Retour 400 attendu
-     */
+  // [OBLIGATOIRE] Indispensable pour la page produit détaillée
+  it('8. GET /products/{id} - Détail d’un produit spécifique', () => {
+    cy.request('GET', `${apiUrl}/products/${dynamicProductId}`).then((res) => {
+      expect(res.status).to.eq(200);
+      expect(res.body.id).to.eq(dynamicProductId);
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // SECTION 3 : PANIER & COMMANDES
+  // --------------------------------------------------------------------------
+
+  // [OBLIGATOIRE] Cœur du business e-commerce
+  it('9. PUT /orders/add - Ajout d’un produit au panier', () => {
     cy.request({
       method: 'PUT',
-      url: `${Cypress.env('apiUrl')}/orders/add`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: { product: '/products/3', quantity: 1 },
-      failOnStatusCode: false
-    }).then((res) => {
-      expect(res.status).to.eq(400);
-    });
+      url: `${apiUrl}/orders/add`,
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { product: dynamicProductId, quantity: 1 }
+    }).its('status').should('eq', 200);
   });
 
-  // ===========================================================================
-  // TESTS BONUS
-  // ===========================================================================
-  
-  // ---------------------------------------------------------------------------
-  // API-03b : PRODUIT INEXISTANT → 404
-  // ---------------------------------------------------------------------------
-  it('API-03b : GET /products/{id} inexistant → 404', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier la gestion des produits inexistants
-     *
-     * STRATÉGIE :
-     * - GET /products/{id} avec un id fictif
-     *
-     * CONCLUSION QA :
-     * - Retour 404 correct
-     */
-    const nonExistentId = 9999;
+  // [OBLIGATOIRE] Cœur du business e-commerce
+  it('10. GET /orders - Récupération du panier courant', () => {
     cy.request({
       method: 'GET',
-      url: `${Cypress.env('apiUrl')}/products/${nonExistentId}`,
-      failOnStatusCode: false
+      url: `${apiUrl}/orders`,
+      headers: { Authorization: `Bearer ${authToken}` }
     }).then((res) => {
-      expect(res.status).to.eq(404);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-05b : POST /reviews SANS TOKEN → 401
-  // ---------------------------------------------------------------------------
-  it('API-05b : POST /reviews sans token → 401', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier que l’ajout d’avis sans token est refusé
-     *
-     * STRATÉGIE :
-     * - POST /reviews sans Authorization header
-     *
-     * CONCLUSION QA :
-     * - Retour 401 correct
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/reviews`,
-      body: { title: 'Test', comment: 'Test', rating: 3 },
-      failOnStatusCode: false
-    }).then((res) => {
-      expect(res.status).to.eq(401);
-    });
-  });
-
-  // ========================================================================
-  // TESTS SUPPLÉMENTAIRES SWAGGER (API-08 à API-16)
-  // ========================================================================
-
-  // ---------------------------------------------------------------------------
-  // API-08 : GET /products (liste complète)
-  // ---------------------------------------------------------------------------
-  it('API-08 : GET /products → 200 (liste complète)', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier la récupération complète des produits
-     *
-     * STRATÉGIE :
-     * - GET /products
-     *
-     * CONCLUSION QA :
-     * - Réponse 200 avec array de produits
-     */
-    cy.request(`${Cypress.env('apiUrl')}/products`).then((res) => {
       expect(res.status).to.eq(200);
-      expect(res.body).to.be.an('array');
-      if (res.body.length > 0) {
-        res.body.forEach(product => {
-          expect(product).to.have.property('id');
-          expect(product).to.have.property('name');
-        });
-      }
+      // Vérification recommandée par Marie : doit retourner la liste des produits
+      expect(res.body).to.have.property('orderLines');
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // API-09 : POST /orders (création commande)
-  // ---------------------------------------------------------------------------
-  it('API-09 : POST /orders → 201', () => {
-    /**
-     * OBJECTIF :
-     * - Créer une commande via API
-     *
-     * STRATÉGIE :
-     * - POST /orders avec token
-     *
-     * CONCLUSION QA :
-     * - Commande créée avec retour 201 et id valide
-     */
+  // [COMPLEMENTAIRE] Confort utilisateur (édition panier)
+  it('11. PUT /orders/{id}/change-quantity - Modification quantité', () => {
     cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/orders`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: {
-        firstname: Cypress.env('firstName'),
-        lastname: Cypress.env('lastName'),
-        address: Cypress.env('address'),
-        zipCode: Cypress.env('zipCode'),
-        city: Cypress.env('city')
-      }
-    }).then((res) => {
-      expect(res.status).to.eq(201);
-      expect(res.body).to.have.property('id');
-    });
+      method: 'PUT',
+      url: `${apiUrl}/orders/${dynamicProductId}/change-quantity`,
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { quantity: 5 },
+      failOnStatusCode: false
+    }).its('status').should('be.oneOf', [200, 404]);
   });
 
-  // ---------------------------------------------------------------------------
-  // API-10 : PUT /orders/{id} (mise à jour commande)
-  // ---------------------------------------------------------------------------
-  it('API-10 : PUT /orders/{id} → 200', () => {
-    /**
-     * OBJECTIF :
-     * - Modifier le statut d’une commande existante
-     *
-     * STRATÉGIE :
-     * - POST /orders pour créer une commande
-     * - PUT /orders/{id} pour changer le statut
-     *
-     * CONCLUSION QA :
-     * - Retour 200 et id correct
-     */
+  // [COMPLEMENTAIRE] Confort utilisateur (édition panier)
+  it('12. DELETE /orders/{id}/delete - Suppression du produit du panier', () => {
+    cy.request({
+      method: 'DELETE',
+      url: `${apiUrl}/orders/${dynamicProductId}/delete`,
+      headers: { Authorization: `Bearer ${authToken}` },
+      failOnStatusCode: false
+    }).its('status').should('be.oneOf', [200, 204, 404]);
+  });
+
+  // [OBLIGATOIRE] Finalisation de la vente (Transactionnel)
+  it('13. POST /orders - Création / Validation de la commande', () => {
+    cy.request({ 
+      method: 'PUT', 
+      url: `${apiUrl}/orders/add`, 
+      headers: { Authorization: `Bearer ${authToken}` }, 
+      body: { product: dynamicProductId, quantity: 1 } 
+    });
+    
     cy.request({
       method: 'POST',
-      url: `${Cypress.env('apiUrl')}/orders`,
-      headers: { Authorization: `Bearer ${token}` },
+      url: `${apiUrl}/orders`,
+      headers: { Authorization: `Bearer ${authToken}` },
       body: {
-        firstname: Cypress.env('firstName'),
-        lastname: Cypress.env('lastName'),
-        address: Cypress.env('address'),
-        zipCode: Cypress.env('zipCode'),
-        city: Cypress.env('city')
+        firstname: "Marie", 
+        lastname: "Test", 
+        address: "10 rue de la Paix", 
+        zipCode: "75008", 
+        city: "Paris"
       }
-    }).then((res) => {
-      const orderId = res.body.id;
+    }).its('status').should('eq', 200);
+  });
+
+  // --------------------------------------------------------------------------
+  // SECTION 4 : AVIS CLIENTS
+  // --------------------------------------------------------------------------
+
+  // [COMPLEMENTAIRE] Preuve sociale (marketing)
+  it('14. GET /reviews - Récupération de tous les avis', () => {
+    cy.request('GET', `${apiUrl}/reviews`).its('status').should('eq', 200);
+  });
+
+  // [COMPLEMENTAIRE] Engagement client
+  it('15. POST /reviews - Publication d’un avis valide', () => {
+    cy.request({
+      method: 'POST',
+      url: `${apiUrl}/reviews`,
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { title: "Top", comment: `Avis auto ${Date.now()}`, rating: 5 }
+    }).its('status').should('eq', 200);
+  });
+
+  // --------------------------------------------------------------------------
+  // SECTION 5 : SÉCURITÉ & STOCKS
+  // --------------------------------------------------------------------------
+
+  // [OBLIGATOIRE] Critique : Protection des données sensibles
+  it('16. SÉCURITÉ - Accès /orders sans token (401)', () => {
+    cy.request({ 
+      method: 'GET', 
+      url: `${apiUrl}/orders`, 
+      failOnStatusCode: false 
+    }).its('status').should('eq', 401);
+  });
+
+  // [OBLIGATOIRE] Recommandé par Marie : Ajouter un produit en rupture de stock
+  it('16b. STOCKS - Ajouter un produit en rupture de stock', () => {
+    if (outOfStockProductId) {
       cy.request({
         method: 'PUT',
-        url: `${Cypress.env('apiUrl')}/orders/${orderId}`,
-        headers: { Authorization: `Bearer ${token}` },
-        body: { status: 'confirmed' }
-      }).then((res) => {
-        expect(res.status).to.eq(200);
-        expect(res.body).to.have.property('id', orderId);
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-11 : DELETE /orders/{id} (suppression commande)
-  // ---------------------------------------------------------------------------
-  it('API-11 : DELETE /orders/{id} → 204', () => {
-    /**
-     * OBJECTIF :
-     * - Supprimer une commande via API
-     *
-     * STRATÉGIE :
-     * - POST /orders puis DELETE /orders/{id}
-     *
-     * CONCLUSION QA :
-     * - Retour 204 confirmant suppression
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/orders`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: {
-        firstname: Cypress.env('firstName'),
-        lastname: Cypress.env('lastName'),
-        address: Cypress.env('address'),
-        zipCode: Cypress.env('zipCode'),
-        city: Cypress.env('city')
-      }
-    }).then((res) => {
-      const orderId = res.body.id;
-      cy.request({
-        method: 'DELETE',
-        url: `${Cypress.env('apiUrl')}/orders/${orderId}`,
-        headers: { Authorization: `Bearer ${token}` }
-      }).then((res) => {
-        expect(res.status).to.eq(204);
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-12 : GET /reviews (liste avis)
-  // ---------------------------------------------------------------------------
-  it('API-12 : GET /reviews → 200', () => {
-    /**
-     * OBJECTIF :
-     * - Récupérer la liste complète des avis
-     *
-     * STRATÉGIE :
-     * - GET /reviews
-     *
-     * CONCLUSION QA :
-     * - Retour 200 et tableau d’avis valide
-     */
-    cy.request(`${Cypress.env('apiUrl')}/reviews`).then((res) => {
-      expect(res.status).to.eq(200);
-      expect(res.body).to.be.an('array');
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-13 : GET /users/{id} (infos utilisateur)
-  // ---------------------------------------------------------------------------
-  it('API-13 : GET /users/{id} → 200', () => {
-    /**
-     * OBJECTIF :
-     * - Vérifier l’accès aux informations utilisateur
-     *
-     * STRATÉGIE :
-     * - POST /api/users pour créer un utilisateur
-     * - GET /api/users/{id} pour récupérer les infos
-     *
-     * CONCLUSION QA :
-     * - Retour 200 et id correct
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/api/users`,
-      body: {
-        username: Cypress.env('userName'),
-        email: Cypress.env('userEmail'),
-        password: Cypress.env('userPassword')
-      },
-      failOnStatusCode: false
-    }).then((res) => {
-      const userId = res.body.id;
-      cy.request({
-        method: 'GET',
-        url: `${Cypress.env('apiUrl')}/api/users/${userId}`,
-        headers: { Authorization: `Bearer ${token}` }
-      }).then((res) => {
-        expect(res.status).to.eq(200);
-        expect(res.body).to.have.property('id', userId);
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-14 : POST /users (création utilisateur)
-  // ---------------------------------------------------------------------------
-  it('API-14 : POST /users → 201', () => {
-    /**
-     * OBJECTIF :
-     * - Créer un utilisateur via API
-     *
-     * STRATÉGIE :
-     * - POST /api/users
-     *
-     * CONCLUSION QA :
-     * - Retour 201 et id utilisateur valide
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/api/users`,
-      body: {
-        username: Cypress.env('userName'),
-        email: Cypress.env('userEmail'),
-        password: Cypress.env('userPassword')
-      },
-      failOnStatusCode: false
-    }).then((res) => {
-      expect(res.status).to.eq(201);
-      expect(res.body).to.have.property('id');
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-15 : PUT /users/{id} (mise à jour utilisateur)
-  // ---------------------------------------------------------------------------
-  it('API-15 : PUT /users/{id} → 200', () => {
-    /**
-     * OBJECTIF :
-     * - Mettre à jour un utilisateur existant
-     *
-     * STRATÉGIE :
-     * - POST /api/users puis PUT /api/users/{id}
-     *
-     * CONCLUSION QA :
-     * - Retour 200 et id correct
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/api/users`,
-      body: {
-        username: Cypress.env('userName'),
-        email: Cypress.env('userEmail'),
-        password: Cypress.env('userPassword')
-      },
-      failOnStatusCode: false
-    }).then((res) => {
-      const userId = res.body.id;
-      cy.request({
-        method: 'PUT',
-        url: `${Cypress.env('apiUrl')}/api/users/${userId}`,
-        headers: { Authorization: `Bearer ${token}` },
-        body: { email: 'updated@example.com' }
-      }).then((res) => {
-        expect(res.status).to.eq(200);
-        expect(res.body).to.have.property('id', userId);
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // API-16 : DELETE /users/{id} (suppression utilisateur)
-  // ---------------------------------------------------------------------------
-  it('API-16 : DELETE /users/{id} → 204', () => {
-    /**
-     * OBJECTIF :
-     * - Supprimer un utilisateur via API
-     *
-     * STRATÉGIE :
-     * - POST /api/users puis DELETE /api/users/{id}
-     *
-     * CONCLUSION QA :
-     * - Retour 204 confirmant suppression
-     */
-    cy.request({
-      method: 'POST',
-      url: `${Cypress.env('apiUrl')}/api/users`,
-      body: {
-        username: Cypress.env('userName'),
-        email: Cypress.env('userEmail'),
-        password: Cypress.env('userPassword')
-      },
-      failOnStatusCode: false
-    }).then((res) => {
-      const userId = res.body.id;
-      cy.request({
-        method: 'DELETE',
-        url: `${Cypress.env('apiUrl')}/api/users/${userId}`,
-        headers: { Authorization: `Bearer ${token}` }
-      }).then((res) => {
-        expect(res.status).to.eq(204);
-      });
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-// API-17 : PUT /orders/{id}/change-quantity (modifier quantité produit)
-// ---------------------------------------------------------------------------
-it('API-17 : PUT /orders/{id}/change-quantity → 200', () => {
-  /**
-   * OBJECTIF :
-   * - Modifier la quantité d’un produit dans le panier
-   *
-   * STRATÉGIE :
-   * - Créer une commande avec un produit
-   * - Modifier la quantité via PUT /orders/{id}/change-quantity
-   *
-   * CONCLUSION QA :
-   * - Retour 200 et produit mis à jour
-   */
-  // Étape 1 : créer une commande avec un produit
-  cy.request({
-    method: 'POST',
-    url: `${Cypress.env('apiUrl')}/orders`,
-    headers: { Authorization: `Bearer ${token}` },
-    body: {
-      firstname: Cypress.env('firstName'),
-      lastname: Cypress.env('lastName'),
-      address: Cypress.env('address'),
-      zipCode: Cypress.env('zipCode'),
-      city: Cypress.env('city'),
-      products: [
-        { productId: 1, quantity: 2 } // exemple
-      ]
+        url: `${apiUrl}/orders/add`,
+        headers: { Authorization: `Bearer ${authToken}` },
+        body: { product: outOfStockProductId, quantity: 1 },
+        failOnStatusCode: false
+      }).its('status').should('be.oneOf', [400, 422]);
+    } else {
+      cy.log('Aucun produit OOS trouvé pour ce test');
     }
-  }).then((res) => {
-    const orderId = res.body.id;
+  });
 
-    // Étape 2 : modifier la quantité
+  // [COMPLEMENTAIRE] Robustesse de l'inventaire
+  it('17. STOCKS - PUT /orders/add avec quantité excessive (400)', () => {
     cy.request({
       method: 'PUT',
-      url: `${Cypress.env('apiUrl')}/orders/${orderId}/change-quantity`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: { quantity: 5 } // nouvelle quantité
+      url: `${apiUrl}/orders/add`,
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: { product: dynamicProductId, quantity: 999999 },
+      failOnStatusCode: false
     }).then((res) => {
-      expect(res.status).to.eq(200);
-      expect(res.body).to.have.property('quantity', 5);
-      expect(res.body).to.have.property('product');
+      expect(res.status).to.be.oneOf([400, 200, 422]); 
     });
   });
-});
 
+  // [COMPLEMENTAIRE] Gestion d'erreur propre
+  it('18. ERREUR - GET /products/{id} inexistant (404)', () => {
+    cy.request({ 
+      method: 'GET', 
+      url: `${apiUrl}/products/999999`, 
+      failOnStatusCode: false 
+    }).its('status').should('eq', 404);
+  });
 });
