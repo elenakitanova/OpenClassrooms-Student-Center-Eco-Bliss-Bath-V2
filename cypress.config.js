@@ -1,4 +1,5 @@
 import { defineConfig } from "cypress";
+import { execSync } from "child_process";
 
 export default defineConfig({
   e2e: {
@@ -17,9 +18,28 @@ export default defineConfig({
     chromeWebSecurity: false,
 
     setupNodeEvents(on, config) {
-      // Emplacement pour d'éventuels plugins ou configurations avancées
+
+      /**
+       * -----------------------------------------------------------------------
+       * RESET GLOBAL DE LA BASE DE DONNÉES AVANT LA CAMPAGNE DE TESTS
+       * -----------------------------------------------------------------------
+       * - Stoppe les conteneurs Docker
+       * - Supprime les volumes (reset DB)
+       * - Redémarre les conteneurs avec les scripts d'init
+       *
+       * ➜ Exécuté UNE SEULE FOIS avant tous les tests (API + UI)
+       * ➜ Garantit des tests reproductibles
+       */
+      on('before:run', () => {
+        console.log('🔄 Reset de la base de données Docker (before:run)');
+        execSync('docker compose down -v && docker compose up -d', {
+          stdio: 'inherit'
+        });
+      });
+
       return config;
     },
+
     // On s'assure que Cypress cherche bien les fichiers .ts
     specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}'
   },
