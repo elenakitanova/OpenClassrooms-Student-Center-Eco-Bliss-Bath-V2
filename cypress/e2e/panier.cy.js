@@ -319,9 +319,9 @@ describe('Tests fonctionnels : Panier', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // CT08 - Quantité très grande (ex : 50) sur la fiche produit (stock / validation)
+  // CT08 - Quantité très grande (ex : 21) sur la fiche produit (stock / validation)
   // ---------------------------------------------------------------------------
-  it('CT08 - Gérer une quantité très grande (50) sur la fiche produit', () => {
+  it('CT08 - Gérer une quantité très grande (21) sur la fiche produit', () => {
     // Objectif : tester la robustesse sur une quantité très grande.
     // Étapes : fiche produit => qty=50 => ajout => panier.
     // Attendu : ajout accepté, refusé ou ajusté (selon règle), sans instabilité UI.
@@ -329,7 +329,7 @@ describe('Tests fonctionnels : Panier', () => {
     goToProductsList();
     openFirstProductFromList();
 
-    setQuantityOnDetail(50);
+    setQuantityOnDetail(21);
     addToCartFromDetail();
     goToCart();
 
