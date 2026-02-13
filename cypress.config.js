@@ -27,11 +27,11 @@ export default defineConfig({
        * - Supprime les volumes (reset DB)
        * - Redémarre les conteneurs avec les scripts d'init
        *
-       * ➜ Exécuté UNE SEULE FOIS avant tous les tests (API + UI)
-       * ➜ Garantit des tests reproductibles
+       * - Exécuté UNE SEULE FOIS avant tous les tests (API + UI)
+       * - Garantit des tests reproductibles
        */
       on('before:run', () => {
-        console.log('🔄 Reset de la base de données Docker (before:run)');
+        console.log('Reset de la base de données Docker (before:run)');
         execSync('docker compose down -v && docker compose up -d', {
           stdio: 'inherit'
         });
@@ -40,7 +40,7 @@ export default defineConfig({
       return config;
     },
 
-    // On s'assure que Cypress cherche bien les fichiers .ts
+    // On s'assure que Cypress cherche bien les fichiers
     specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}'
   },
 
@@ -54,6 +54,10 @@ export default defineConfig({
     lastName: 'Doe',
     address: '123 Rue Principale',
     city: 'Paris',
-    zipCode: '75001'
+    zipCode: '75001',
+
+    registerFirstName: 'Elena',
+    registerLastName: 'Kitanova',
+    registerPassword: 'Ecobliss4'
   }
 });
