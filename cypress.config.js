@@ -1,63 +1,82 @@
 import { defineConfig } from "cypress";
 import { execSync } from "child_process";
 
+let didResetForRun = false;
+
+function resetDockerDb() {
+  console.log("Reset DB (Docker + bind mount ./mysql)");
+
+  // Stop containers
+  execSync("docker compose down", { stdio: "inherit" });
+
+  // Reset bind mount local (down -v ne le supprime pas)
+  execSync("rm -rf ./mysql && mkdir ./mysql", { stdio: "inherit" });
+
+  // Restart containers (réimporte le dump depuis ./data via init scripts)
+  execSync("docker compose up -d", { stdio: "inherit" });
+
+  // Attente que l’API soit réellement up
+  try {
+    execSync(
+      `bash -lc 'for i in {1..30}; do curl -sf http://localhost:8081/api/health >/dev/null && exit 0; echo "Attente API..."; sleep 1; done; exit 1'`,
+      { stdio: "inherit" }
+    );
+  } catch (e) {
+    throw new Error("API non prête après reset DB.");
+  }
+}
+
 export default defineConfig({
   e2e: {
-    // 1. URL de base de l'application (Frontend Angular)
-    // Permet d'utiliser cy.visit('/') au lieu de l'URL complète
-    baseUrl: 'http://localhost:4200', 
-    
-    // 2. Temps d'attente global (10 secondes) pour éviter les timeouts
-    defaultCommandTimeout: 10000, 
-
-    // 3. Taille de la fenêtre (Desktop) pour garantir la visibilité de la barre de navigation
+    baseUrl: "http://localhost:4200",
+    defaultCommandTimeout: 10000,
     viewportWidth: 1280,
     viewportHeight: 720,
-
-    // 4. Désactivation de la sécurité web (utile pour les redirections locales)
     chromeWebSecurity: false,
 
     setupNodeEvents(on, config) {
+      // Campagne complète (CI / soutenance) : reset 1 fois au démarrage
+      on("before:run", () => {
+        didResetForRun = true;
+        resetDockerDb();
+      });
 
       /**
-       * -----------------------------------------------------------------------
-       * RESET GLOBAL DE LA BASE DE DONNÉES AVANT LA CAMPAGNE DE TESTS
-       * -----------------------------------------------------------------------
-       * - Stoppe les conteneurs Docker
-       * - Supprime les volumes (reset DB)
-       * - Redémarre les conteneurs avec les scripts d'init
+       * Mode interactif (cypress open) : pas de before:run
+       * → on reset au lancement de chaque spec.
        *
-       * - Exécuté UNE SEULE FOIS avant tous les tests (API + UI)
-       * - Garantit des tests reproductibles
+       * En mode `cypress run`, `before:spec` est aussi déclenché.
+       * Pour éviter un double reset inutile, on ne reset pas ici si on vient
+       * déjà de reset via before:run.
        */
-      on('before:run', () => {
-        console.log('Reset de la base de données Docker (before:run)');
-        execSync('docker compose down -v && docker compose up -d', {
-          stdio: 'inherit'
-        });
+      on("before:spec", () => {
+        if (!didResetForRun) {
+          resetDockerDb();
+        }
+      });
+
+      // Sécurité : en fin de run, on remet le flag à zéro
+      on("after:run", () => {
+        didResetForRun = false;
       });
 
       return config;
     },
 
-    // On s'assure que Cypress cherche bien les fichiers
-    specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}'
+    specPattern: "cypress/e2e/**/*.cy.{js,jsx,ts,tsx}",
   },
 
-  // 5. Variables d'environnement et Constantes
-  // Accessibles dans les tests via Cypress.env('nom_de_la_variable')
   env: {
-    apiUrl: 'http://localhost:8081', // URL de l'API Backend (Docker)
-    userEmail: 'test2@test.fr',     // Identifiant pour les tests
-    userPassword: 'testtest',        // Mot de passe pour les tests
-    firstName: 'John',
-    lastName: 'Doe',
-    address: '123 Rue Principale',
-    city: 'Paris',
-    zipCode: '75001',
-
-    registerFirstName: 'Elena',
-    registerLastName: 'Kitanova',
-    registerPassword: 'Ecobliss4'
-  }
+    apiUrl: "http://localhost:8081",
+    userEmail: "test2@test.fr",
+    userPassword: "testtest",
+    firstName: "John",
+    lastName: "Doe",
+    address: "123 Rue Principale",
+    city: "Paris",
+    zipCode: "75001",
+    registerFirstName: "Elena",
+    registerLastName: "Kitanova",
+    registerPassword: "Ecobliss4",
+  },
 });
