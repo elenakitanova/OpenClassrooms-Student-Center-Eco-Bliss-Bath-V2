@@ -1,5 +1,5 @@
-## Eco Bliss Bath — Campagne de tests automatisés (Cypress)
-# Contexte
+# Eco Bliss Bath — Campagne de tests automatisés (Cypress)
+## Contexte
 
 1. Ce dépôt contient une campagne de tests automatisés réalisée avec Cypress pour l’application e-commerce Eco Bliss Bath.
 
@@ -26,7 +26,7 @@
 - 1 spec en échec (api_tests.cy.js)
 - Les parcours UI critiques sont validés à 100 %.
 
-# Prérequis
+## Prérequis
 - Node.js (LTS recommandé)
 - npm
 - Docker & Docker Compose
@@ -35,7 +35,7 @@ Application Eco Bliss Bath lancée en local :
 - Frontend : http://localhost:4200
 - API : http://localhost:8081
 
-# Installation
+## Installation
 1. Se placer dans le dossier du projet (déjà cloné) :
 cd OpenClassrooms-Student-Center-Eco-Bliss-Bath-V2
 
@@ -53,7 +53,7 @@ cd OpenClassrooms-Student-Center-Eco-Bliss-Bath-V2
 - Vérifier que l’API répond : http://localhost:8081/api/health
 - Vérifier que le frontend est accessible : http://localhost:4200
 
-# Lancer les tests
+## Lancer les tests
 1. Mode interactif (debug)
 Commande : npx cypress open
 
@@ -80,7 +80,7 @@ npx cypress run déclenche automatiquement l’évènement before:run.
 Cela provoque un reset complet de la base avant le début de la campagne.
 Le reset par spec garantit également l’isolation entre les différents fichiers de test.
 
-# Rapport des tests
+## Rapport des tests
 1. En mode interactif : npx cypress open
 Les résultats sont visibles dans l’interface Cypress.
 
@@ -105,7 +105,7 @@ Les screenshots sont disponibles dans : cypress/screenshots
 - des tests reproductibles,
 - une exécution fiable en soutenance et en intégration continue.
 
-# Stratégie d’automatisation
+## Stratégie d’automatisation
 La stratégie d’automatisation repose sur :
 - Une séparation claire entre tests UI et tests API.
 - Une centralisation des variables d’environnement.
@@ -234,7 +234,17 @@ Vérifications :
 
 Résultat : conforme.
 
-# Variables d’environnement
+## Anomalies détectées lors de la campagne
+- 2 non-conformités techniques (mineures)
+- 2 anomalies métier backend (majeures)
+| ID     | Type                  | Gravité  | Statut  |
+|--------|-----------------------|----------|---------|
+| NC-1   | Code HTTP incorrect   | Mineure  | Ouverte |
+| NC-2   | Non conformité REST   | Mineure  | Ouverte |
+| ANO-03 | Bug métier stock      | Majeure  | Ouverte |
+| ANO-04 | Bug métier stock      | Majeure  | Ouverte |
+
+## Variables d’environnement
 Les variables sont définies dans cypress.config.js :
 
 env: {
