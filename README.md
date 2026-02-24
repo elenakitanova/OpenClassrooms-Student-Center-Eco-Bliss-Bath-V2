@@ -90,7 +90,7 @@ Les résultats sont affichés dans le terminal.
 3. En cas d’échec
 Les screenshots sont disponibles dans : cypress/screenshots
 
-# Reset automatique de la base de donnée
+## Reset automatique de la base de donnée
 1. Le reset s’appuie sur Docker et sur un bind mount local ./mysql.
 
 2. Le mécanisme exécuté par Cypress :
